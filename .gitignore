@@ -7,5 +7,6 @@ node_modules
 .cdk.staging
 cdk.out
 
-# TensorRT binary (large file, managed separately via S3)
+# TensorRT binaries (large files, managed separately via S3)
 TensorRT-*.tar.gz
+*.deb
