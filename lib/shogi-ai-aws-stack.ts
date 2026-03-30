@@ -19,15 +19,10 @@ export class ShogiAiAwsStack extends cdk.Stack {
 
     const deployFukauraou = engine === 'fukauraou' || engine === 'both';
     const deployDlshogi = engine === 'dlshogi' || engine === 'both';
-    const tensorrtS3Uri = [
-      `s3://cdk-hnb659fds-assets-${this.account}-${this.region}`,
-      'dlshogi-assets',
-      'TensorRT-7.1.3.4.Ubuntu-18.04.x86_64-gnu.cuda-11.0.cudnn8.0.tar.gz',
-    ].join('/');
     const dlshogiUserDataScript = fs.readFileSync(
       path.join(__dirname, '..', 'scripts', 'dlshogi-userdata.sh'),
       'utf8'
-    ).replace('${TENSORRT_S3_URI}', tensorrtS3Uri);
+    );
 
     // VPC
     const vpc = new ec2.Vpc(this, 'ShogiAiVpc', {
@@ -49,7 +44,8 @@ export class ShogiAiAwsStack extends cdk.Stack {
       id: string,
       machineImage: ec2.IMachineImage,
       userData?: ec2.UserData,
-      rootVolumeSizeGiB: number = 8
+      rootVolumeSizeGiB: number = 8,
+      additionalVolumeSizeGiB?: number
     ) => {
       const securityGroup = new ec2.SecurityGroup(this, `${id}SecurityGroup`, {
         vpc,
@@ -60,7 +56,6 @@ export class ShogiAiAwsStack extends cdk.Stack {
         assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3ReadOnlyAccess'),
         ],
       });
 
@@ -76,6 +71,14 @@ export class ShogiAiAwsStack extends cdk.Stack {
             deviceName: '/dev/sda1',
             volume: ec2.BlockDeviceVolume.ebs(rootVolumeSizeGiB),
           },
+          ...(additionalVolumeSizeGiB
+            ? [
+                {
+                  deviceName: '/dev/sdf',
+                  volume: ec2.BlockDeviceVolume.ebs(additionalVolumeSizeGiB),
+                },
+              ]
+            : []),
         ],
         spotOptions: {
           interruptionBehavior: ec2.SpotInstanceInterruption.TERMINATE,
@@ -106,11 +109,11 @@ export class ShogiAiAwsStack extends cdk.Stack {
       createSpotInstance(
         'dlshogi',
         ec2.MachineImage.fromSsmParameter(
-          '/aws/service/canonical/ubuntu/server/18.04/stable/current/amd64/hvm/ebs-gp2/ami-id',
+          '/aws/service/deeplearning/ami/x86_64/oss-nvidia-driver-gpu-pytorch-2.7-ubuntu-22.04/latest/ami-id',
           { os: ec2.OperatingSystemType.LINUX }
         ),
         ec2.UserData.custom(dlshogiUserDataScript),
-        30
+        100
       );
     }
 
